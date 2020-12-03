@@ -1,0 +1,416 @@
+---
+title: "HACHICHA - CENTRALE"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+fig_width: 4
+fig_height: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+On commence par la lecture des données, l'ajout de la colonne dates et le calcul du Earnings Yield
+
+```{r }
+df = read.csv(file='061120_data.csv', sep=';', header=T)
+df['date'] = seq(from = as.Date("1960-01-01"), to = as.Date("2019-03-01"), by = 'month')
+df['ey'] = 100 * (df$earnings / df$price)
+```
+
+## Question 1
+
+```{r,  fig.height=4, fig.width=7}
+library(ggplot2)
+ggplot(data = df) + 
+  geom_line(aes(x = date, y = ey, color = "Earning Yield")) +
+  geom_line(aes(x = date, y = rates, color = "Rates")) +
+  xlab('Date') +
+  ylab('') +
+  labs(color='')
+```
+
+On remarque que les deux courbes suivent généralement la même tendance. On vérifie la relation linéaire en faisant le plot suivant.
+
+```{r,  fig.height=4, fig.width=7}
+model = lm(ey~rates, data = df)
+plot(df$rates, df$ey, xlab = 'Rates', ylab = 'EY', pch=20, col='blue', title('Scatter plot EY vs. Rates'))
+abline(model)
+```
+
+On constate donc une certaine relation affine entre les deux variables.
+
+## Question 2
+
+La méthode des moindres carrés ordinaires, ou MCO, a pour objectif, étant donné des observations d'une variable $(y_{i})_{i \in [1,..n]}$ et des observations de variables explicatives $(X_{i})_{i \in [1,..n]}$, de lier ces observations par la relation: $y=X \beta + \epsilon$ avec $\beta$ un vecteur coefficients ou des poids pour pondérer les $X_{i}$ et $\epsilon$ un vecteur d'erreur qui suit la loi normale centrée $N(0, \sigma^2I)$.
+
+Une estimation de $\beta$ est $\hat{\beta} = \underset{\beta}{argmin} \: \left \| y-X\beta \right \|^2$
+
+Les hypothèses du modèle linéaire sont:
+  - Les varaibles explicatives ne sont pas corrélées.
+  - Les $\epsilon_i$ sont décorrélées. Ceci est exigé déjà par l'hypothèse $\epsilon \sim N(0, \sigma^2I)$
+  - Homoscédasticité: Les $(\epsilon_i)$ ont une variance constante $\sigma^2$
+  - Exogénéité: Les variables explicatives ne sont pas corrélées aux termes d'erreurs.
+
+## Question 3
+On définit la fonction d'erreur : $f(\alpha, \beta) = \sum_{t=0}^{n}{(\frac{E_t}{P_t}-(\alpha +\beta r_t))^2}$
+
+Pour minimiser f, on écrit:
+$\frac{\partial f}{\partial \alpha} = 0$
+  
+librarlibr$\Leftrightarrow n.\alpha + \sum_{t=0}^{n}{(\beta r_t-\frac{E_t}{P_t})}=0$
+  
+donc $\hat{\alpha} = \bar{(\frac{E}{P})} - \hat{\beta} \bar{r}$
+  
+Et aussi nous avons que:
+  
+$\frac{\partial f}{\partial \beta} = 0 \Leftrightarrow \sum_t{r_t((\frac{E}{P})_t-\hat{\alpha}-\hat{\beta}r_t)} = 0 \Leftrightarrow \hat{\beta}=\frac{\sum_t{(r_t-\bar{r})((\frac{E}{P})_t-\bar{(\frac{E}{P})})}}{\sum_t(r_t-\bar{r})^2}=\frac{Cov(\frac{E}{P},r)}{\sigma_r^2}$
+  
+$Var(\hat{\beta}) = Var(\frac{\sum_t{(r_t-\bar{r}).(\frac{E}{P})_t}}{\sum_t(r_t-\bar{r})^2}) = Var(\frac{\sum_t{(r_t-\bar{r}).(\beta r_t +\alpha + \epsilon_t)}}{\sum_t(r_t-\bar{r})^2})= Var(\frac{\sum_t{(r_t-\bar{r}).\epsilon_t}}{\sum_t(r_t-\bar{r})^2})$ car la seule variable aléatoire ici est $\epsilon_t$.
+  
+Ainsi: $Var(\hat{\beta}) = \frac{\sigma^2.\sum_t{(r_t-\bar{r})^2}}{(\sum_t(r_t-\bar{r})^2)^2} = \frac{\sigma^2}{\sum_t(r_t-\bar{r})^2}=\frac{\sigma^2}{T.\sigma_r^2}$
+  
+Avec $\sigma_r$ l'écart type des taux sans risques. D'où en supposant que $\sigma_r$ reste constant (ou au moins borné) quand $T \to + \infty$, nous avons $Var(\hat{\beta}) \overset{T \to + \infty}{\rightarrow} 0$
+
+## Question 4
+
+```{r}
+summary(model)
+```
+Les p-values du test de student pour l'intercept et pour la variables $rates$ sont très faibles, ce qui signifie que les termes d'intercept de rates sont significatifs dans le modèle.
+La p-value du test de Fisher (en bas) est très faible aussi. Ceci affirme donc que le modèle linéaire est significatif.
+
+Cependant, on a un $R_{adjusted}^2 = 0.4974$ qui est assez faible, ce qui signifie que la qualité d'ajustement du modèle n'est pas très bonne.
+
+## Question 5
+
+#### Normalité des résidus :
+
+```{r,  fig.height=4, fig.width=5}
+ggplot(data=model, aes(x=model$residuals)) +
+  geom_density(color="red")
+```
+  
+  La densité tracée n'est pas très similaire à une densité normale. Il y a beaucoup d'irrégularités, une asymétrie et une queue (distribution tail) assez longue à droite.
+
+
+```{r,  fig.height=4, fig.width=5}
+qqnorm(model$residuals)
+```
+  
+  On voit calirement que le qqplot n'est pas une ligne droite parfaite. Ceci confirme que la distribution des résidus est 'skewed' (biaisée en français?)
+
+#### Autocorrélation des résidus :
+
+```{r echo=FALSE}
+library(lmtest)
+```
+  
+```{r }
+acf(model$residuals)
+bgtest(model)
+```
+
+  
+Le plot de l'ACF et la très faible p-value du test de Breusch-Godfrey montrent clairement qu'il y a une autocorrélation entre les résidus du modèle linéaire.
+
+\pagebreak
+
+#### Recherche d'hétéroscédasticité
+```{r , fig.height=5, fig.width=6}
+plot(model$fitted.values, model$residuals, xlab = 'Fitted values', ylab='Residuals')
+```
+  
+Les résidues ne semblent pas centrés autour de la ligne 0 et ils ne sont pas régulièrement répartis autour de cette ligne ce qui suggère que leur variance n'est pas constante (la variance augmente notamment quand les fitted values augmentent)
+```{r}
+bptest(model)
+```
+  On a une très faible p-value donc on rejette l'hypothèse nulle d'homoscedasticité. Le test de Breush-Pagan confirme l'existence d'hétéroscédasticité.
+  
+Pour la traiter on peut utiliser un GLS (Generalized Least Squares). Ce modèle essaie de minimiser $(y-X\beta)^T\Sigma^{-1}(y-X\beta)$ où $\Sigma$ est la matrice de covariance des résidus de notre premier modèle MCO.
+
+Dans ce cas, puisque $\Sigma$ est symétrique, on peut écrire $\Sigma = A^TA$ et on obtient:
+  
+$(y-X\beta)^T\Sigma^{-1}(y-X\beta) = (A^{-1}y-A^{-1}X\beta)^T(A^{-1}y-A^{-1}X\beta) = \left \| A^{-1}y-A^{-1}X\beta \right \|$
+  
+D'où le GLS revient à faire une OLS $y'=X'\beta + \epsilon'$ où on $y'=A^{-1}y$, $X'=A^{-1}X$ 
+
+## Question 6
+
+On observe à partir du plot des deux séries temporelles de rates et earning yield qu'à partir de l'an 2000 à peu près on quelques perturbations qui font que les deux séries ne suivent pas forcément les mêmes tendances.
+  
+On peut utiliser le test de Chow pour déterminer la date de rupture la plus probable.
+On décide de découper le dataset en deux parties : avant et après janvier 2002.
+
+```{r}
+library(gridExtra)
+
+df_1 = df[df$date <= '2001-12-31', ]
+df_2 = df[df$date > '2001-12-31', ]
+plot_1 = ggplot(data = df_1) + 
+  geom_point(aes(x = rates, y = ey)) +
+  xlab('Rates') +
+  ylab('Earning Yields') +
+  labs(title = 'Avant décembre 2001') +
+  theme(plot.title = element_text(hjust = 0.5))
+plot_2 = ggplot(data = df_2) + 
+  geom_point(aes(x = rates, y = ey)) +
+  xlab('Rates') +
+  ylab('Earning Yields') +
+  labs(title='Après janvier 2002') +
+  theme(plot.title = element_text(hjust = 0.5))
+grid.arrange(plot_1, plot_2, ncol = 2)
+
+```
+  
+  
+Pour la période jusqu'à décembre 2001, on observe une certaine linéarité entre les deux variables. Par contre, pour seconde période, on n'arrive pas à identifier visuellement une corrélation entre les taux d'intérêt et les Earning Yields.
+  
+On entraine deux modèle de régression linéaire sur les deux périodes respectives:
+
+#### Période 1:
+  
+```{r , fig.height=4, fig.width=5}
+model_1 = lm(ey~rates, data=df_1)
+summary(model_1)
+```
+  
+Le test de Fisher montre que le modèle est significatif. Les tests de student montrent que les variables sont significatives.
+  
+#### Période 2
+  
+```{r}
+model_2 = lm(ey~rates, data=df_2)
+summary(model_2)
+```
+Le test de Fisher a une p-value élevée ce qui indique qu'on peut rejeter l'hypothèse de significativité de ce modèle.
+Pour traiter ce type de configuration de données, on peut recourir aux familles de modèles de régréssions non linéaires, comme par exemple le random forest.
+
+## Partie 2: Estimation d'une nouvelle spécification et comparaiso
+## Question 7
+
+```{r}
+library(data.table)
+df['real_rates'] =df$rates - 100 * (df$cpi - shift(df$cpi, 12)) / shift(df$cpi, 12)
+model_q7 = lm(ey~real_rates, data = df)
+summary(model_q7)
+```
+Les tests de student et de Fisher montrent que le modèle ainsi que les variables utilisés sont significatifs. 
+
+Néanmoins le R-squared (0.01422) est très bas !
+
+On fait alors une régression linéaire sur chacune des deux périodes :
+
+##### Première période
+```{r}
+df_1 = df[df$date <= '2001-12-31', ]
+model_1 = lm(ey~real_rates, data=df_1)
+summary(model_1)
+```
+  
+Les tests de student et de Fisher sont concluants. Néanmoins, le $R^2$ est très faible.
+
+```{r}
+library(ggplot2)
+ggplot(data = df_1, aes(x = real_rates, y = ey)) + 
+  geom_point(color='black') +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title='Première période') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+  
+  En effet, on n'a plus une tendance affine entre le earning yield et les taux d'intérêt réels. On peut retenir le premier modèle (earning yield en fonction des taux sans risques seulement) pour la première période.
+  
+##### Pour la deuxième période:
+
+```{r}
+df_2 = df[df$date > '2001-12-31', ]
+model_2 = lm(ey~real_rates, data=df_2)
+summary(model_2)
+```
+
+On observe pas mal d'améliorations pour la deuxième période avec la prise en compte des taux réels. En effet, le test de Fisher montre que le modèle est significatif et les tests de Student montrent que les variables explicatives sont significatives également
+  
+Le $R^2 = 0.2301$ est bas, mais en tout cas il est bien meilleur que celui obtenu avec le premier modèle (avec les taux sans risques) où le R² était égal à 0.001411.
+
+```{r}
+ggplot(data = df_2, aes(x = real_rates, y = ey)) + 
+  geom_point(color='black') +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title='Deuxième période') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+  
+  Le scatter plot confirme la colinéarité (même si elle n'est pas très forte) entre le earning yield et les taux d'intérêt réels pour cette deuxième période.
+
+##### En conclusion:
+- Pour la première période : on peut retenir le premier modèle (earning yield en fonction des taux sans risques seulement).
+- Pour la deuxième période : on peut retenir le deuxième modèle avec les taux d'intérêt réels.
+
+## Partie 3: Estimation d'une nouvelle spécification : modèle ARMA(p, d, q)
+## Question 8
+Un modèle ARMA(p,q) est un modèle de séries temporelles où, pour un processus temporel $X_t$ on suppose que :
+$X_t = \epsilon_t + \sum_{i=1}^{p}{\phi_{i}X_{t-i}} + \sum_{j=1}^{q}{\theta_{j}\epsilon_{t-j}}$ où
+  
+- Les $\phi_i$ et les $\theta_j$ sont des paramètres du modèle.
+- Les $\epsilon_j$ sont des termes d'erreurs (bruits blancs)
+  
+Un modèle ARIMA(p,d,q) est un modèle telle que $\Delta^dX$ est un processus ARMA(p,q) où $\Delta$ est l'opérateur de différentiaition, c'est à dire $(\Delta X)_t= X_t-X_{t-1}$
+
+ARIMA est l'acronyme de AutoRegressive Intergrated Moving Average.
+  
+## Question 9
+#### Méthode 1
+Pour l'estimation de q, on regarde la fonction d'autocorrélation:
+```{r}
+acf(x=df$ey)
+```
+  
+  On observe que l'ordre d'autocorrélation est très grand. La série n'est donc pas stationnaire. On considère donc la différenciation au premier ordre :
+```{r}
+diff_ey = diff(df$ey)
+acf(diff_ey)
+```
+  
+On observe des pics jusqu'au 5ème ordre donc on peut estimer que q=5.
+  
+Pour estimer p, on regarde la fonction d'autocorrélation partielle :
+```{r}
+pacf(diff_ey)
+```
+  
+Il est difficile d'avoir une valeur sûre de p à partir de ce plot, on peut retenir p=1 vu qu'il n'y a pas de pic au deuxième ordre et que les pics suivant ne sont pas importants. Mais on peut supposer à priori que p est égal à 6. On vérifiera cette valeur lors de la méthode 2.
+
+#### Méthode 2
+On utilise la fonction Arima et on regarde les p-values associés aux coefficients du modèle:
+```{r}
+library(stats)
+arima_model = arima(df$ey, order=c(6,1,5))
+arima_model
+```
+Le coefficient ar2 n'est pas significatif, et donc on peut retenir un modèle ARIMA(1,1,5) à priori.
+```{r}
+arima_model = arima(df$ey, order=c(1,1,5))
+acf(arima_model$residuals)
+```
+  
+L'ACF des résidus correspond bien à une ACF d'un bruit blanc, ce qui montre que notre choix ARIMA(1,1,5) est bien cohérent.
+  
+##### Tests de la stationnarité de la série temporelle
+```{r}
+library(tseries)
+tseries::adf.test(df$ey)
+```
+Le test d'ADF renvoie une p-value (0.1362) assez grande, ce qui montre qu'il n'y a pas de preuves contre la non-stationnarité de la série temporelle.
+```{r}
+tseries::kpss.test(df$ey)
+```
+Pour le test KPSS, l'hypothèse nulle est que la série est stationnaire. Ici, on a une p-value faible, et donc on peut rejeter l'hypothèse nulle, ce qui confirme que la série est non stationnaire.
+```{r}
+pp.test(df$ey)
+```
+Le test de Phillips-Perron renvoie une p-value (0.5595) assez grande, ce qui montre qu'il n'y a pas de preuves contre la non-stationnarité de la série temporelle.
+
+## Question 10
+```{r}
+library(forecast)
+auto_arima_model = auto.arima(df$ey, max.p = 20,max.q = 20, max.d=3)
+auto_arima_model
+```
+Le modèle finalement retenu est un ARIMA(1,1,2). Notre première estimation ARIMA(1,1,5) a donc été précise pour l'estimation de p et d, mais moins précise pour q.
+  
+## Question 11
+
+```{r}
+predicted_values = stats::predict(auto_arima_model, n.ahead=36)
+
+
+ggplot()+
+  geom_line(aes(x=1:36,y=predicted_values$pred, colour='Predicted Values'))+
+  geom_line(aes(x=1:36,y=predicted_values$pred+qnorm(0.95)*predicted_values$se, colour = '95% confidence interval bound'))+
+  geom_line(aes(x=1:36,y=predicted_values$pred-qnorm(0.95)*predicted_values$se, colour = '95% confidence interval bound'))+
+  labs(title='Prévisions et intervalles de confiance pour les 3 prochaines périodes',
+       x='Mois', y='Earning Yield')
+
+```
+  
+Comme prévu pour un modèle ARIMA, les prévisions se stabilisent au cours du temps et convergent vers une valeur fixe. Les intervalles de confiance sont de plus en plus larges.
+  
+## Question 12
+#### MAE
+```{r}
+library(Metrics)
+scores = data.frame(models=c('Manual ACF/PACF Model', 'AutoArima Model'),
+                    MAE = c(mae(df$ey, df$ey - arima_model$residuals), 
+                            mae(df$ey, df$ey - auto_arima_model$residuals)),
+                    RMSE = c(rmse(df$ey, df$ey - arima_model$residuals),
+                             rmse(df$ey, df$ey - auto_arima_model$residuals)))
+print(scores)
+```
+Les MAE et RMSE sont équivalents pour les deux modèles. Le premier est meilleur en terme de MAE et le deuxième est un peu meilleur un terme de RMSE.
+  
+## Question 11.bis
+```{r}
+resid1 = arima_model$residuals
+resid2 = auto_arima_model$residuals
+d = resid1^2 - resid2^2
+d.cov <- acf(d, na.action = na.omit, lag.max = 0, type = "covariance", plot = FALSE)$acf[, , 1]
+d.var <- sum(c(d.cov[1], 2 * d.cov[-1]))/length(d)
+dv <- d.var
+stat <- mean(d, na.rm = TRUE)/sqrt(dv)
+print(stat)
+
+```
+
+  |S| < 1.96 et donc on retient l'hypothèse nulle, d'où les deux modèles ont presque le même pouvoir prédictif.
+  
+## Partie 4: Stabilité du modèle
+  
+## Question 13
+  
+```{r}
+n_obs = nrow(df)
+betas = c()
+lower_bound = c()
+upper_bound = c()
+
+for (i in 1:(n_obs-60)){
+  sub_df = df[i:(i+59),]
+  sub_model = lm(ey~rates, data=sub_df)
+  coefs = summary(sub_model)$coefficients
+  betas = append(betas, coefs[2,1])
+  lower_bound = append(lower_bound, coefs[2,1]-qnorm(0.95)*coefs[2,2])
+  upper_bound = append(upper_bound, coefs[2,1]+qnorm(0.95)*coefs[2,2])}
+
+ggplot() +
+  geom_line(aes(x=df[1:(n_obs-60), 'date'], y=betas, colour='beta'))+
+  geom_line(aes(x=df[1:(n_obs-60), 'date'], y=lower_bound, colour='95% Confidence interval'))+
+  geom_line(aes(x=df[1:(n_obs-60), 'date'], y=upper_bound, colour='95% Confidence interval'))+
+  labs(title = 'Evolution of beta', x='First observation year', y='beta')
+```
+  
+On remarque une instabilité claire de l'estimation de beta. Cette instabilité est plus importante à partir de la fin des années 90, où beta alterne carrément entre valeurs positives et négatives, et donc on a à la fois des périodes où le Earning Yield croit avec taux d'intérêt sans risque et d'autres périodes où il décroit quand les taux d'intérêt croissent.
+  
+## Question 14
+#### Le test de CUSUM
+Le test de CUSUM permet de détecter les instabilités des équations de régression au cours du temps.Pour cela, il se base sur la somme cumulée des résidus récursifs, d'où son nom (CUmulative SUM). 
+Pour ce test, on trace l'évolution de la courbe de la somme cumulée au cours du temps et si cette courbe ne coupe pas une certaine frontière (appelée corridor) alors le modèle est stable.
+L'hypothèse nulle de ce test est que le modèle est stable.
+
+#### Implémentation
+  
+D'abord, on trace les résidus cumulatifs et les frontières (en rouge) du CUSUM test.
+```{r}
+library(strucchange)
+cusum_plot <- efp(ey~rates, type="Rec-CUSUM", data=df)
+plot(cusum_plot)
+```
+  
+  On remarque que la courbe CUSUM coupe et s'éloigne largement du corridor ce qui suggère que le modèle est instable.
+  On regarde ensuite la p-value du test CUSUM pour confirmer:
+```{r}
+sctest(ey~rates, data = df)
+```
+La p-value du test est très faible et donc on peut rejeter l'hypothèse null (H0: le modèle est stable), ce qui confirme donc l'instabilité du modèle.
+
